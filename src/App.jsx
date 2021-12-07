@@ -2,10 +2,11 @@ import React, { useEffect, useState } from "react";
 import './App.css';
 import { ethers } from "ethers";
 import abi from './utils/GmPortal.json';
+import moment from 'moment';
 
 const App = () => {
    const [currentAccount, setCurrentAccount] = useState("");
-   const contractAddress = "0x32795750392e9F56E09d1b685B5D4db972EB9Fb5";
+   const contractAddress = "0x283626DD71023c3EFCe4d1bb389fF645C8771604";
    const contractABI = abi.abi;
    const [allGms, setAllGms] = useState([]);
    const [nickname, setNickname] = useState("");
@@ -111,7 +112,7 @@ const App = () => {
         let count = await gmPortalContract.getTotalGms();
         console.log("Retrieved total gm count...", count.toNumber());
 
-        const waveTxn = await gmPortalContract.gm(nickname);
+        const waveTxn = await gmPortalContract.gm(nickname, { gasLimit: 300000 });
         console.log("Mining...", waveTxn.hash);
 
         await waveTxn.wait();
@@ -119,8 +120,6 @@ const App = () => {
 
         count = await gmPortalContract.getTotalGms();
         console.log("Retrieved total wave count...", count.toNumber());
-
-        await getAllGms();
       } else {
         console.log("Ethereum object doesn't exist!");
       }
@@ -130,39 +129,87 @@ const App = () => {
 }
 
   useEffect(() => {
+    let gmPortalContract;
+
     checkIfWalletIsConnected();
+
+    const onNewGm = (from, timestamp, nickname) => {
+      console.log('NewGm', from, timestamp, nickname);
+      setAllGms(prevState => [
+        ...prevState,
+        {
+          address: from,
+          timestamp: new Date(timestamp * 1000),
+          nickname: nickname,
+        },
+      ]);
+    };
+
+    if (window.ethereum) {
+      const provider = new ethers.providers.Web3Provider(window.ethereum);
+      const signer = provider.getSigner();
+
+      gmPortalContract = new ethers.Contract(contractAddress, contractABI, signer);
+      gmPortalContract.on('NewGm', onNewGm);
+    }
+
+    return () => {
+      if (gmPortalContract) {
+        gmPortalContract.off('NewGm', onNewGm);
+      }
+    };
+
   }, [])
   
   return (
     <div className="mainContainer">
       
       <div className="dataContainer">
-        <div className="header">
-        gm
+        <div className="header" class="text-5xl text-center my-4">
+        gm 👋
         </div>
 
-        <button className="waveButton" onClick={gm}>
-          Say gm
-        </button>
+        <div class="text-center">
+          Say gm, 50% chance to win some ETH
+        </div>
         
         {/*
         * If there is no currentAccount render this button
         */}
         {!currentAccount && (
-          <button className="waveButton" onClick={connectWallet}>
+          <button class="shadow bg-purple-500 hover:bg-purple-400 my-2 focus:shadow-outline focus:outline-none text-white font-bold py-2 px-4 rounded" onClick={connectWallet}>
             Connect Wallet
           </button>
         )}
 
-        <input type="text" placeholder="Nickname" onChange={e => setNickname(e.target.value)} />
+        {currentAccount && (
+        <input class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline my-2" type="text" placeholder="Nickname" onChange={e => setNickname(e.target.value)} />
+        )}
+
+        {currentAccount && (
+        <button class="shadow bg-purple-500 hover:bg-purple-400 my-2 focus:shadow-outline focus:outline-none text-white font-bold py-2 px-4 rounded" type="button" onClick={gm}>
+          gm
+        </button>
+        )}
+
+        <div class="text-xl text-gray-800 mt-10 mb-1">
+          Previous gmers 👇
+        </div>
 
         {allGms.map((gm, index) => {
           return (
-            <div key={index} style={{ backgroundColor: "OldLace", marginTop: "16px", padding: "8px" }}>
-              <div>Address: {gm.address}</div>
-              <div>Time: {gm.timestamp.toString()}</div>
-              <div>From: {gm.nickname}</div>
-            </div>)
+            <div key={index} class="place-self-end text-right my-8 w-full h-10">
+                <div class="bg-green-50 text-green-900 p-5 rounded-2xl rounded-tr-none flex flex-row w-full">
+                  <div class="flex flex-row relative w-full">
+                    <div>gm 👋</div>
+                    <div class="ml-auto">
+                      <div class="text-gray-600" title={gm.address}>{gm.nickname}</div>
+                    <div class="text-gray-400 text-xs">{moment(gm.timestamp).fromNow()}</div>
+                    </div>          
+                  </div>
+                </div>
+            </div>
+          )
         })}
       </div>
     </div>
